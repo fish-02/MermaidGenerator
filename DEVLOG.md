@@ -38,6 +38,7 @@ npm run lint        # 執行 oxlint 檢查
   - 預覽面板的 Mermaid 渲染錯誤原本直接把 mermaid.js 丟出的技術性錯誤訊息整段顯示；改成先用一句白話說明「這個圖表目前無法正常渲染，可能是節點文字包含 Mermaid 無法辨識的內容，畫布與程式碼內容不會遺失」，技術性原始錯誤訊息收進可展開的「技術細節」裡，需要時才看
 - **GitHub Pages 部署準備**：`vite.config.ts` 設定 `base: '/MermaidGenerator/'`，新增 `.github/workflows/deploy.yml`（`actions/checkout` → `npm ci` → `npm run build` → `actions/upload-pages-artifact` → `actions/deploy-pages`，推送到 `main` 分支自動觸發），README 補上部署步驟說明。用 `npm run build` + `npm run preview` 實際跑一次帶 base path 的正式建置結果，Playwright 確認頁面、樣式、字型、Mermaid 渲染都正常載入、無 404 或 console 錯誤
 - 這次沒有一起做的：favicon 客製化（目前仍是 Vite/React 預設圖示）留待之後有需要再處理
+- **部署平台臨時由 GitHub Pages 改為 Vercel**：`git push` 後照計畫設定好 GitHub Pages（Settings → Pages → Source 選 GitHub Actions），workflow 也順利跑完部署成功，但實際打開 `https://fish-02.github.io/MermaidGenerator/` 時 Chrome 顯示「危險網站」警告（Google Safe Browsing 判定）。用 `curl` 直接比對部署出來的 HTML/JS 內容跟本機建置結果完全一致，排除是這次程式碼或部署流程被竄改的可能，判斷是 `github.io` 這個共用網域本身被 Google 判定的問題，不是專案程式碼的問題。決定改用網域資源不共用、風險較低的 Vercel：移除 `.github/workflows/deploy.yml`、`vite.config.ts` 的 `base: '/MermaidGenerator/'` 也一併移除（改回預設的根路徑 `/`，Vercel 是部署在自己的根網域，不像 GitHub Pages 的專案頁面需要子路徑）
 
 **下一步**：企劃書六個階段已全數完成。後續屬於自由維護期，若有新需求（例如更多節點形狀、循序圖、深色模式等）會在此檔案另開新的階段記錄
 

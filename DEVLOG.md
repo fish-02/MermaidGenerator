@@ -38,6 +38,7 @@ npm run lint        # 執行 oxlint 檢查
   - 預覽面板的 Mermaid 渲染錯誤原本直接把 mermaid.js 丟出的技術性錯誤訊息整段顯示；改成先用一句白話說明「這個圖表目前無法正常渲染，可能是節點文字包含 Mermaid 無法辨識的內容，畫布與程式碼內容不會遺失」，技術性原始錯誤訊息收進可展開的「技術細節」裡，需要時才看
 - **GitHub Pages 部署準備**：`vite.config.ts` 設定 `base: '/MermaidGenerator/'`，新增 `.github/workflows/deploy.yml`（`actions/checkout` → `npm ci` → `npm run build` → `actions/upload-pages-artifact` → `actions/deploy-pages`，推送到 `main` 分支自動觸發），README 補上部署步驟說明。用 `npm run build` + `npm run preview` 實際跑一次帶 base path 的正式建置結果，Playwright 確認頁面、樣式、字型、Mermaid 渲染都正常載入、無 404 或 console 錯誤
 - 這次沒有一起做的：favicon 客製化（目前仍是 Vite/React 預設圖示）留待之後有需要再處理
+- **`fish-02.github.io` 被 Chrome／Google Safe Browsing 判定為危險網站，深入排查後確認與本專案程式碼無關**：第一次部署上線後開啟網址被瀏覽器擋下，因此暫時改試過 Vercel，但使用者要求先查清楚根本原因、盡量在不換部署平台的情況下解決。深入排查證據：`npm audit` 0 個漏洞；打包後的 JS 全文搜尋確認沒有 `eval()`／`new Function()`／`document.write`／`<iframe>` 注入；唯一的 `fetch()` 呼叫是 Vite 官方 modulepreload polyfill（同源預載其他程式碼區塊），katex 套件裡看似的 `fetch(` 其實是它 parser 內部 token 物件的方法名稱、與網路請求無關；`dist/index.html` 的所有 `<script>`／`<link>` 都指向自己網域下的 `/assets/...`，沒有任何外部 CDN、追蹤碼或第三方腳本。搜尋後也證實這是 GitHub Pages 上有大量社群討論的已知現象：Safe Browsing 的判定綁在 `使用者名稱.github.io` 這個子網域本身（很可能是帳號名稱或子網域先前被別人使用時留下的殘留標記），不是掃描 repo 裡的檔案內容。結論：改回 GitHub Pages（`vite.config.ts` 的 base path、`.github/workflows/deploy.yml` 都復原），沒有程式碼需要修正；正規解法是透過 Google Search Console 驗證網域擁有權後申請安全性複檢，等 Google 重新掃描
 
 **下一步**：企劃書六個階段已全數完成。後續屬於自由維護期，若有新需求（例如更多節點形狀、循序圖、深色模式等）會在此檔案另開新的階段記錄
 

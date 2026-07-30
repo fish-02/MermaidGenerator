@@ -19,11 +19,13 @@ npm.cmd run dev
 npm.cmd install
 ```
 
-## 部署到 Vercel
+## 部署到 GitHub Pages
 
-專案部署在 Vercel（而非 GitHub Pages——`fish-02.github.io` 這個網域被 Google Safe Browsing 誤判為危險網站，改用 Vercel 的獨立網域避開這個問題）。
+專案已內建 `.github/workflows/deploy.yml`：推送到 `main` 分支後會自動 build 並部署到 GitHub Pages。
 
-Vercel 專案已連結這個 GitHub repository：推送到 `main` 分支後會自動觸發 build 並部署，設定為 Vite 預設值即可（Build Command `npm run build`、Output Directory `dist`）。
+第一次設定時，需要在 GitHub 網站的 repo 設定：**Settings → Pages → Build and deployment → Source** 選擇 **GitHub Actions**（只需設定一次）。
+
+`vite.config.ts` 裡的 `base: '/MermaidGenerator/'` 對應的是 GitHub repository 名稱，如果 repo 名稱不同，要記得同步修改。
 
 ## Vite 說明
 

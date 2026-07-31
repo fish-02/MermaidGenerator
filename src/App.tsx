@@ -16,7 +16,7 @@ interface Notice {
 }
 
 const LAYOUT_ID = 'mermaidgenerator-main-layout'
-const DEFAULT_LAYOUT = { code: 25, canvas: 35, preview: 40 }
+const DEFAULT_LAYOUT = { code: 25, canvas: 40, preview: 35 }
 
 function isEditableTarget(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false

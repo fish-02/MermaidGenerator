@@ -24,6 +24,7 @@ interface GraphStore {
   addNode: (shape: NodeShape, position: { x: number; y: number }) => string
   updateNodeLabel: (id: string, label: string) => void
   updateNodePosition: (id: string, position: { x: number; y: number }) => void
+  applyNodePositions: (updates: { id: string; position: { x: number; y: number } }[]) => void
   updateNodeColor: (id: string, color: string | undefined) => void
   updateNodesColor: (ids: string[], color: string | undefined) => void
   removeNode: (id: string) => void
@@ -73,6 +74,19 @@ export const useGraphStore = create<GraphStore>()(
           model: {
             ...state.model,
             nodes: state.model.nodes.map((node) => (node.id === id ? { ...node, position } : node)),
+          },
+        }))
+      },
+
+      applyNodePositions: (updates) => {
+        const positionById = new Map(updates.map((update) => [update.id, update.position]))
+        set((state) => ({
+          model: {
+            ...state.model,
+            nodes: state.model.nodes.map((node) => {
+              const position = positionById.get(node.id)
+              return position ? { ...node, position } : node
+            }),
           },
         }))
       },

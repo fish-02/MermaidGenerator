@@ -4,6 +4,7 @@ import {
   ReactFlowProvider,
   Background,
   Controls,
+  ControlButton,
   applyNodeChanges,
   applyEdgeChanges,
   useReactFlow,
@@ -16,6 +17,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { useGraphStore } from '../store/graphStore'
 import { modelToRFEdges, modelToRFNodes } from '../canvas/modelToReactFlow'
+import { resolveOverlaps, type OverlapBox } from '../canvas/autoArrange'
 import { ShapeNode } from './nodes/ShapeNode'
 import { GroupNode, type GroupNodeData } from './nodes/GroupNode'
 import { CanvasToolOverlay, SHAPE_DRAG_DATA_TYPE } from './CanvasToolOverlay'
@@ -27,11 +29,13 @@ const GROUP_PADDING = 24
 const GROUP_LABEL_HEIGHT = 30
 const DEFAULT_NODE_WIDTH = 120
 const DEFAULT_NODE_HEIGHT = 50
+const ARRANGE_GAP = 32
 
 function CanvasInner() {
   const model = useGraphStore((state) => state.model)
   const addNode = useGraphStore((state) => state.addNode)
   const updateNodePosition = useGraphStore((state) => state.updateNodePosition)
+  const applyNodePositions = useGraphStore((state) => state.applyNodePositions)
   const removeNode = useGraphStore((state) => state.removeNode)
   const removeNodes = useGraphStore((state) => state.removeNodes)
   const duplicateNode = useGraphStore((state) => state.duplicateNode)
@@ -95,6 +99,77 @@ function CanvasInner() {
   }, [model.subgraphs, model.nodes, nodes])
 
   const allNodes = useMemo<Node[]>(() => [...groupRFNodes, ...nodes], [groupRFNodes, nodes])
+
+  const handleAutoArrange = useCallback(() => {
+    const nodeSize = (node: Node) => ({
+      width: node.measured?.width ?? DEFAULT_NODE_WIDTH,
+      height: node.measured?.height ?? DEFAULT_NODE_HEIGHT,
+    })
+
+    // Step 1: resolve overlaps between member nodes within each subgraph independently.
+    const localPositions = new Map(nodes.map((node) => [node.id, { ...node.position }]))
+    for (const subgraph of model.subgraphs) {
+      const memberIds = model.nodes.filter((node) => node.subgraphId === subgraph.id).map((node) => node.id)
+      const boxes: OverlapBox[] = memberIds
+        .map((id) => nodes.find((node) => node.id === id))
+        .filter((node): node is Node => Boolean(node))
+        .map((node) => ({ id: node.id, ...localPositions.get(node.id)!, ...nodeSize(node) }))
+      if (boxes.length < 2) continue
+      resolveOverlaps(boxes, ARRANGE_GAP)
+      for (const box of boxes) localPositions.set(box.id, { x: box.x, y: box.y })
+    }
+
+    // Step 2: build one box per subgraph (post step-1 bounding box) plus one box per standalone node.
+    const topLevelBoxes: OverlapBox[] = []
+    const subgraphOriginalBox = new Map<string, { x: number; y: number }>()
+
+    for (const subgraph of model.subgraphs) {
+      const memberIds = model.nodes.filter((node) => node.subgraphId === subgraph.id).map((node) => node.id)
+      const members = memberIds
+        .map((id) => nodes.find((node) => node.id === id))
+        .filter((node): node is Node => Boolean(node))
+      if (members.length === 0) continue
+
+      const minX = Math.min(...members.map((node) => localPositions.get(node.id)!.x)) - GROUP_PADDING
+      const minY =
+        Math.min(...members.map((node) => localPositions.get(node.id)!.y)) - GROUP_PADDING - GROUP_LABEL_HEIGHT
+      const maxX =
+        Math.max(...members.map((node) => localPositions.get(node.id)!.x + nodeSize(node).width)) + GROUP_PADDING
+      const maxY =
+        Math.max(...members.map((node) => localPositions.get(node.id)!.y + nodeSize(node).height)) + GROUP_PADDING
+
+      subgraphOriginalBox.set(subgraph.id, { x: minX, y: minY })
+      topLevelBoxes.push({ id: subgraph.id, x: minX, y: minY, width: maxX - minX, height: maxY - minY })
+    }
+
+    for (const node of nodes) {
+      const modelNode = model.nodes.find((candidate) => candidate.id === node.id)
+      if (modelNode?.subgraphId) continue
+      const position = localPositions.get(node.id)!
+      topLevelBoxes.push({ id: node.id, ...position, ...nodeSize(node) })
+    }
+
+    resolveOverlaps(topLevelBoxes, ARRANGE_GAP)
+
+    // Step 3: translate grouped members by their subgraph's shift; standalone nodes take the resolved box position directly.
+    const finalPositions = new Map(localPositions)
+    for (const box of topLevelBoxes) {
+      const originalGroupBox = subgraphOriginalBox.get(box.id)
+      if (originalGroupBox) {
+        const dx = box.x - originalGroupBox.x
+        const dy = box.y - originalGroupBox.y
+        const memberIds = model.nodes.filter((node) => node.subgraphId === box.id).map((node) => node.id)
+        for (const id of memberIds) {
+          const position = localPositions.get(id)!
+          finalPositions.set(id, { x: position.x + dx, y: position.y + dy })
+        }
+      } else {
+        finalPositions.set(box.id, { x: box.x, y: box.y })
+      }
+    }
+
+    applyNodePositions(Array.from(finalPositions, ([id, position]) => ({ id, position })))
+  }, [nodes, model.nodes, model.subgraphs, applyNodePositions])
 
   const onNodesChange = useCallback(
     (changes: NodeChange<Node>[]) => {
@@ -164,7 +239,16 @@ function CanvasInner() {
           fitView
         >
           <Background />
-          <Controls />
+          <Controls>
+            <ControlButton onClick={handleAutoArrange} title="自動整理（解決重疊）">
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2">
+                <rect x="3" y="3" width="7" height="7" rx="1" />
+                <rect x="14" y="3" width="7" height="7" rx="1" />
+                <rect x="3" y="14" width="7" height="7" rx="1" />
+                <rect x="14" y="14" width="7" height="7" rx="1" />
+              </svg>
+            </ControlButton>
+          </Controls>
         </ReactFlow>
         {model.nodes.length === 0 && (
           <p className="canvas-panel__empty-hint">拖曳左上角「形狀與顏色」中的形狀到畫布，開始建立流程圖</p>
